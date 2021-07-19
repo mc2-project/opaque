@@ -91,9 +91,9 @@ assemblyShadeRules in (Test, assembly) := commonShadeRules
 testOptions in Test += Tests.Argument("-oF")
 
 lazy val commonJavaOptions =
-  Seq("-Xmx2048m", "-XX:ReservedCodeCacheSize=384m", "-Dlog4j.configuration=log4j.properties")
-javaOptions in Test ++= commonJavaOptions
-javaOptions in run ++= commonJavaOptions ++ Seq("-Dspark.master=local[*]")
+  Seq("-Xmx4096m", "-XX:ReservedCodeCacheSize=384m")
+Test / javaOptions := commonJavaOptions
+run / javaOptions := commonJavaOptions ++ Seq("-Dspark.master=local[1]")
 
 scalacOptions ++= Seq(
   "-deprecation",

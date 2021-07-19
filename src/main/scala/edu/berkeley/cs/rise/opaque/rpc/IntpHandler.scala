@@ -18,6 +18,7 @@
 package edu.berkeley.cs.rise.opaque.rpc
 
 import org.apache.spark.SparkConf
+import org.apache.spark.sql.SparkSession
 
 import scala.tools.nsc.interpreter.IMain
 import scala.tools.nsc.interpreter.IR.Result
@@ -29,27 +30,32 @@ import java.io._
 /* Handler to simplify writing to an instance of OpaqueILoop. */
 object IntpHandler {
 
-  /* We need to include the jars provided to Spark in the new IMain's classpath. */
-  val sparkJars = new SparkConf().get("spark.jars", "").replace(",", ":")
+  val intp = {
+    /* We need to include the jars provided to Spark in the new IMain's classpath. */
+    val sparkJars = new SparkConf().get("spark.jars", "").replace(",", ":")
 
-  val settings = new GenericRunnerSettings(msg => Console.err.println(msg))
-  settings.classpath.value = sys.props("java.class.path").concat(":").concat(sparkJars)
+    val settings = new GenericRunnerSettings(System.err.println(_))
+    settings.classpath.value = sys.props("java.class.path").concat(":").concat(sparkJars)
+    settings.usejavacp.value = true
 
-  /* Construct an interpreter that routes all output to stdout. */
-  val intp = IMain(settings)
+    new IMain(settings)
+  }
 
   /* Initial commands for the interpreter to execute.
    * This has to be called before any call to IntpHandler.run
    */
   def initializeIntp() = {
     intp.initializeSynchronous()
+
+    println(
+      "############################# Commands from Spark startup #############################"
+    )
+    val spark = SparkSession.builder.getOrCreate
+    intp.bind("spark", spark)
+    val sc = spark.sparkContext
+    intp.bind("sc", sc)
     val initializationCommands = Seq(
       """
-        @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {
-            org.apache.spark.repl.Main.sparkSession
-        } else {
-            org.apache.spark.repl.Main.createSparkSession()
-        }
         @transient val sc = {
         val _sc = spark.sparkContext
         if (_sc.getConf.getBoolean("spark.ui.reverseProxy", false)) {
@@ -82,10 +88,7 @@ object IntpHandler {
       edu.berkeley.cs.rise.opaque.Utils.initOpaqueSQL(spark)
       """
     )
-    val cap, _ = run(initializationCommands)
-    println(
-      "############################# Commands from Spark startup #############################"
-    )
+    val (cap, _) = run(initializationCommands)
     println(cap)
     println(
       "#######################################################################################"
